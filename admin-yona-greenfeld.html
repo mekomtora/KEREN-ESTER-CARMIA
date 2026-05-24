@@ -3,136 +3,378 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מערכת אישורים - כרמיה</title>
+    <title>מערכת אישורים - קרן אסתר כרמיה</title>
     
-    <!-- סקריפטים חיצוניים -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        apple: {
+                            bg: '#f5f5f7',
+                            card: '#ffffff',
+                            text: '#1d1d1f',
+                            muted: '#86868b',
+                            blue: '#0071e3',
+                            blueHover: '#0077ed',
+                            inputBg: '#f5f5f7',
+                            border: '#d2d2d7'
+                        }
+                    },
+                    boxShadow: {
+                        'apple': '0 4px 24px rgba(0,0,0,0.04)',
+                        'apple-hover': '0 10px 40px rgba(0,0,0,0.08)'
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-        body { background-color: #f5f5f7; margin: 0; font-family: system-ui, -apple-system, sans-serif; }
-        .loading-screen { display: flex; justify-content: center; align-items: center; height: 100vh; font-size: 20px; color: #86868b; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f5f5f7; 
+            color: #1d1d1f;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .animate-fade-up { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        input, select { transition: all 0.2s ease-in-out; }
+        
+        .apple-header-glass {
+            background-color: rgba(28, 28, 30, 0.85); /* צבע כהה להדגיש שזה ממשק מנהל */
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+        }
+
+        .apple-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #86868b;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* סגנון צ'קבוקס מותאם לאפל */
+        .apple-checkbox {
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border: 2px solid #d2d2d7;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            background-color: #f5f5f7;
+            transition: all 0.2s;
+        }
+        .apple-checkbox:checked {
+            background-color: #34c759;
+            border-color: #34c759;
+        }
+        .apple-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 3px;
+            width: 6px;
+            height: 12px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
     </style>
 </head>
 <body>
 
-    <!-- זה מה שיוצג אם ה-JS לא נטען או עדיין בטעינה -->
-    <div id="root">
-        <div class="loading-screen">
-            <div>מתחבר למערכת כרמיה, אנא המתן...</div>
-        </div>
-    </div>
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNAlwhFVlUnyYpPhjUaw_CWlvigtRJOEmM7qyFNHvXo0eksT9diQkcJsfUL8wogKGB-g/exec"; 
 
-        const InputField = ({ label, type, name, value, onChange, placeholder, required = true }) => (
-            <div className="mb-5">
-                <label className="block text-[13px] font-semibold text-gray-500 mb-2">{label}</label>
+        const isValidIsraeliID = (id) => {
+            let strId = String(id).trim();
+            if (strId.length > 9 || strId.length < 5) return false;
+            strId = strId.padStart(9, '0');
+            return Array.from(strId, Number).reduce((counter, digit, i) => {
+                const step = digit * ((i % 2) + 1);
+                return counter + (step > 9 ? step - 9 : step);
+            }) % 10 === 0;
+        };
+
+        const isValidMobile = (phone) => /^05\d{8}$/.test(phone);
+
+        const InputField = ({ label, type, name, value, onChange, placeholder, required = true, error, className = "" }) => (
+            <div className={`mb-5 ${className}`}>
+                <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">{label} {required && <span className="text-red-500">*</span>}</label>
                 <input 
                     type={type} name={name} value={value} onChange={onChange}
-                    className="w-full px-4 h-14 rounded-2xl bg-[#f5f5f7] border border-transparent focus:bg-white focus:border-[#0071e3] outline-none text-[17px]" 
+                    className={`w-full px-4 h-14 rounded-2xl bg-apple-inputBg border ${error ? 'border-red-400 bg-red-50 text-red-900' : 'border-transparent text-apple-text'} outline-none focus:bg-white focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/20 text-[17px]`} 
                     placeholder={placeholder} required={required} 
                 />
+                {error && <p className="text-red-500 text-[12px] mt-1.5 font-medium ml-2">{error}</p>}
+            </div>
+        );
+
+        const SectionCard = ({ title, children, className = "" }) => (
+            <div className={`bg-apple-card rounded-[24px] p-8 md:p-10 shadow-apple mb-8 border border-gray-100 ${className}`}>
+                <div className="mb-6 border-b border-gray-100 pb-4">
+                    <h2 className="text-2xl font-semibold tracking-tight text-apple-text">{title}</h2>
+                </div>
+                {children}
             </div>
         );
 
         const App = () => {
-            const [loanData, setLoanData] = useState({ id: null, name: '', amount: '', purpose: '', date: '' });
             const [step, setStep] = useState(1);
             const [submitting, setSubmitting] = useState(false);
-            const [guarantors, setGuarantors] = useState([
-                { firstName: '', lastName: '', idNumber: '', phone: '', address: '', hasSignature: false },
-                { firstName: '', lastName: '', idNumber: '', phone: '', address: '', hasSignature: false }
-            ]);
+            const [loanId, setLoanId] = useState(null);
+            
+            // נתוני אישור המנהל
+            const [adminData, setAdminData] = useState({
+                authCode: '',
+                paymentStartDate: '',
+                collectionDay: '10'
+            });
 
+            // מערך ערבים דינמי (מתחיל מ-2 חובה)
+            const getEmptyGuarantor = () => ({ firstName: '', lastName: '', idNumber: '', phone: '', email: '', address: '', hasSignature: false });
+            const [guarantors, setGuarantors] = useState([getEmptyGuarantor(), getEmptyGuarantor()]);
+            const [errors, setErrors] = useState({});
+
+            // חילוץ ה-ID מהקישור בטעינת העמוד
             useEffect(() => {
-                try {
-                    const params = new URLSearchParams(window.location.search);
-                    const id = params.get('id');
-                    if (id) {
-                        setLoanData({
-                            id: id,
-                            name: params.get('name') || 'לא סופק',
-                            amount: params.get('amount') || '0',
-                            purpose: params.get('purpose') || 'לא צוין',
-                            date: params.get('date') || ''
-                        });
-                    }
-                } catch (e) { console.error("URL Parsing error", e); }
+                const params = new URLSearchParams(window.location.search);
+                const idFromUrl = params.get('id');
+                if (idFromUrl) {
+                    setLoanId(idFromUrl);
+                }
             }, []);
+
+            const handleAdminChange = (e) => {
+                setAdminData({ ...adminData, [e.target.name]: e.target.value });
+            };
+
+            const handleGuarantorChange = (index, field, value) => {
+                const newGuarantors = [...guarantors];
+                newGuarantors[index][field] = value;
+                setGuarantors(newGuarantors);
+                
+                // מחיקת שגיאות תוך כדי הקלדה
+                const errorKey = `g_${index}_${field}`;
+                if (errors[errorKey]) {
+                    setErrors(prev => ({ ...prev, [errorKey]: null }));
+                }
+            };
+
+            const addGuarantor = () => {
+                setGuarantors([...guarantors, getEmptyGuarantor()]);
+            };
+
+            const removeGuarantor = (index) => {
+                if (guarantors.length > 2) {
+                    const newGuarantors = guarantors.filter((_, i) => i !== index);
+                    setGuarantors(newGuarantors);
+                }
+            };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
+                let currentErrors = {};
+
+                // ולידציה לערבים
+                guarantors.forEach((g, idx) => {
+                    if (!isValidIsraeliID(g.idNumber)) currentErrors[`g_${idx}_idNumber`] = 'תעודת זהות לא תקינה';
+                    if (!isValidMobile(g.phone)) currentErrors[`g_${idx}_phone`] = 'מספר טלפון לא תקין';
+                    if (!g.hasSignature) currentErrors[`g_${idx}_sig`] = 'חובה לסמן אישור חתימה';
+                });
+
+                if (Object.keys(currentErrors).length > 0) {
+                    setErrors(currentErrors);
+                    alert('אנא תקנו את השגיאות בטופס לפני האישור.');
+                    return;
+                }
+
                 setSubmitting(true);
-                // כאן תהיה הקריאה לשרת
-                setTimeout(() => { setSubmitting(false); setStep(2); }, 2000);
+
+                try {
+                    const payload = {
+                        action: 'approve_loan',
+                        loanId: loanId,
+                        authCode: adminData.authCode,
+                        paymentStartDate: adminData.paymentStartDate,
+                        collectionDay: adminData.collectionDay,
+                        guarantors: guarantors
+                    };
+
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: "POST",
+                        mode: "no-cors", // בגלל מגבלות גוגל - נניח שהצליח אחרי השהייה
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+
+                    setTimeout(() => {
+                        setSubmitting(false);
+                        setStep(2);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }, 2500);
+
+                } catch (err) {
+                    setSubmitting(false);
+                    alert("אירעה שגיאה בתקשורת מול השרת. אנא נסה שנית.");
+                }
             };
 
-            if (!loanData.id && step === 1) {
+            if (!loanId && step === 1) {
                 return (
-                    <div className="flex items-center justify-center min-h-screen">
-                        <div className="bg-white p-10 rounded-3xl shadow-xl text-center">
-                            <h2 className="text-2xl font-bold text-red-500">שגיאת נתונים</h2>
-                            <p className="mt-2 text-gray-600">לא נמצא מספר בקשה בקישור.</p>
+                    <div className="min-h-screen flex items-center justify-center bg-apple-bg">
+                        <div className="bg-white p-10 rounded-[24px] shadow-apple text-center">
+                            <h2 className="text-2xl font-bold text-red-500 mb-2">שגיאת מערכת</h2>
+                            <p className="text-apple-muted">חסר מזהה בקשה (ID) בקישור. לא ניתן לאשר הלוואה.</p>
                         </div>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen pb-20">
-                    <header className="bg-[#1c1c1e] text-white p-4 sticky top-0 z-50">
-                        <div className="max-w-3xl mx-auto flex justify-between items-center">
-                            <span className="font-bold">אישור מנהל - כרמיה</span>
-                            <span className="text-sm opacity-70">בקשה #{loanData.id}</span>
+                <div className="min-h-screen flex flex-col font-sans">
+                    {submitting && (
+                        <div className="fixed inset-0 bg-apple-bg/80 backdrop-blur-xl flex items-center justify-center z-50">
+                            <div className="flex flex-col items-center">
+                                <div className="apple-spinner mb-4"></div>
+                                <h3 className="text-xl font-semibold">מאשר בקשה ומפיק שטר הלוואה...</h3>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Dark Admin Header */}
+                    <header className="fixed top-0 w-full apple-header-glass border-b border-gray-800 z-40">
+                        <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-[17px] font-bold text-white tracking-wide">פאנל מנהל מאשר</h1>
+                            </div>
+                            <div className="text-[13px] text-gray-300 font-medium">
+                                בקשה מס' {loanId}
+                            </div>
                         </div>
                     </header>
 
-                    <main className="max-w-2xl mx-auto mt-10 px-4">
-                        {step === 1 ? (
-                            <form onSubmit={handleSubmit} className="animate-fade-in">
-                                <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 mb-8">
-                                    <h3 className="font-bold text-blue-900 mb-4 text-lg">פרטי הלווה</h3>
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div><span className="text-blue-600 block">שם:</span> <span className="font-bold">{loanData.name}</span></div>
-                                        <div><span className="text-blue-600 block">סכום:</span> <span className="font-bold">{loanData.amount} ₪</span></div>
-                                        <div><span className="text-blue-600 block">מטרה:</span> <span className="font-bold">{loanData.purpose}</span></div>
-                                        <div><span className="text-blue-600 block">תאריך:</span> <span className="font-bold">{loanData.date}</span></div>
+                    <main className="flex-grow pt-28 pb-20 px-4 sm:px-6">
+                        <div className="max-w-3xl mx-auto">
+                            
+                            {step === 1 && (
+                                <div className="opacity-0 animate-fade-up">
+                                    <div className="mb-8">
+                                        <h2 className="text-3xl font-bold text-apple-text mb-2">אישור הלוואה - כרמיה</h2>
+                                        <p className="text-apple-muted">אנא הזן את פרטי הערבים ומועדי הגבייה כדי לאשר את ההלוואה ולהפיק את השטר ללווה.</p>
                                     </div>
-                                </div>
 
-                                <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 mb-8">
-                                    <h3 className="font-bold text-xl mb-6 text-gray-800">הזנת ערבים</h3>
-                                    {guarantors.map((g, i) => (
-                                        <div key={i} className="mb-10 pb-6 border-b last:border-0 border-gray-100">
-                                            <h4 className="font-bold text-blue-600 mb-4">ערב {i+1}</h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <InputField label="שם פרטי" type="text" value={g.firstName} onChange={(e) => {
-                                                    const n = [...guarantors]; n[i].firstName = e.target.value; setGuarantors(n);
-                                                }} />
-                                                <InputField label="שם משפחה" type="text" value={g.lastName} onChange={(e) => {
-                                                    const n = [...guarantors]; n[i].lastName = e.target.value; setGuarantors(n);
-                                                }} />
+                                    <form onSubmit={handleSubmit}>
+                                        
+                                        <SectionCard title="אימות מנהל ומועדי פירעון">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                                                <InputField label="קוד אישור (מורשה)" name="authCode" type="password" value={adminData.authCode} onChange={handleAdminChange} placeholder="הכנס סיסמת מנהל" />
+                                                <InputField label="תאריך תחילת גבייה" name="paymentStartDate" type="date" value={adminData.paymentStartDate} onChange={handleAdminChange} />
                                             </div>
+                                            <div className="mb-2 w-full md:w-1/2">
+                                                <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">יום גבייה קבוע בחודש <span className="text-red-500">*</span></label>
+                                                <select name="collectionDay" value={adminData.collectionDay} onChange={handleAdminChange} className="w-full px-4 h-14 rounded-2xl bg-apple-inputBg border border-transparent text-apple-text outline-none focus:bg-white focus:border-apple-blue focus:ring-4 text-[17px]">
+                                                    <option value="1">1 לחודש</option>
+                                                    <option value="10">10 לחודש</option>
+                                                    <option value="15">15 לחודש</option>
+                                                    <option value="20">20 לחודש</option>
+                                                </select>
+                                            </div>
+                                        </SectionCard>
+
+                                        <div className="mb-6 flex justify-between items-end">
+                                            <h3 className="text-2xl font-bold text-apple-text">פרטי ערבים</h3>
+                                            <span className="text-sm font-medium text-apple-blue bg-blue-50 px-3 py-1 rounded-full">סה"כ: {guarantors.length} ערבים</span>
                                         </div>
-                                    ))}
-                                    <button type="submit" className="w-full bg-[#0071e3] text-white py-4 rounded-2xl font-bold hover:bg-[#0077ed] transition-all">
-                                        {submitting ? "מעבד..." : "אשר הלוואה והנפק שטר"}
-                                    </button>
+
+                                        {guarantors.map((g, index) => (
+                                            <div key={index} className="bg-white rounded-[24px] p-8 shadow-sm border border-gray-200 mb-6 relative transition-all hover:shadow-md">
+                                                {index >= 2 && (
+                                                    <button type="button" onClick={() => removeGuarantor(index)} className="absolute top-6 left-6 text-red-500 hover:text-red-700 bg-red-50 p-2 rounded-full transition-colors">
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                )}
+                                                
+                                                <h4 className="font-semibold text-lg mb-5 flex items-center gap-2">
+                                                    <div className="w-6 h-6 bg-apple-text text-white rounded-full flex items-center justify-center text-sm">{index + 1}</div>
+                                                    ערב מספר {index + 1}
+                                                </h4>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                                                    <InputField label="שם פרטי" value={g.firstName} onChange={(e) => handleGuarantorChange(index, 'firstName', e.target.value)} type="text" />
+                                                    <InputField label="שם משפחה" value={g.lastName} onChange={(e) => handleGuarantorChange(index, 'lastName', e.target.value)} type="text" />
+                                                    <InputField label="תעודת זהות" value={g.idNumber} onChange={(e) => handleGuarantorChange(index, 'idNumber', e.target.value)} type="text" error={errors[`g_${index}_idNumber`]} />
+                                                    <InputField label="טלפון נייד" value={g.phone} onChange={(e) => handleGuarantorChange(index, 'phone', e.target.value)} type="tel" error={errors[`g_${index}_phone`]} />
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                                                    <InputField label="כתובת מגורים מלאה" value={g.address} onChange={(e) => handleGuarantorChange(index, 'address', e.target.value)} type="text" />
+                                                    <InputField label="דואר אלקטרוני" value={g.email} onChange={(e) => handleGuarantorChange(index, 'email', e.target.value)} type="email" required={false} placeholder="לא חובה" />
+                                                </div>
+
+                                                <div className="mt-2 bg-green-50/50 p-4 rounded-xl border border-green-100 flex items-start gap-4">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="apple-checkbox mt-0.5 flex-shrink-0" 
+                                                        checked={g.hasSignature}
+                                                        onChange={(e) => handleGuarantorChange(index, 'hasSignature', e.target.checked)}
+                                                    />
+                                                    <div>
+                                                        <label className="font-semibold text-[15px] text-green-900 block cursor-pointer" onClick={() => handleGuarantorChange(index, 'hasSignature', !g.hasSignature)}>
+                                                            וידאתי חתימה של ערב זה
+                                                        </label>
+                                                        {errors[`g_${index}_sig`] && <span className="text-red-500 text-sm mt-1 block">{errors[`g_${index}_sig`]}</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        <button type="button" onClick={addGuarantor} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-[24px] text-apple-blue font-semibold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 mb-10">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                                            הוסף ערב נוסף
+                                        </button>
+
+                                        <div className="flex flex-col items-center">
+                                            <button type="submit" disabled={submitting} className="bg-[#34c759] hover:bg-[#2eb350] text-white text-[17px] font-semibold py-4 px-12 rounded-full shadow-md transition-all w-full md:w-auto min-w-[300px]">
+                                                אשר הלוואה והנפק שטר ללווה
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
-                            </form>
-                        ) : (
-                            <div className="bg-white p-10 rounded-3xl shadow-sm text-center">
-                                <div className="text-5xl mb-4">✅</div>
-                                <h2 className="text-3xl font-bold">הבקשה אושרה!</h2>
-                                <p className="text-gray-500 mt-2">שטר הלוואה נשלח כעת ללווה.</p>
-                            </div>
-                        )}
+                            )}
+
+                            {step === 2 && (
+                                <div className="bg-white rounded-[32px] p-10 md:p-16 shadow-apple text-center opacity-0 animate-fade-up">
+                                    <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <svg className="text-white w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-apple-text mb-3">האישור בוצע בהצלחה!</h2>
+                                    <p className="text-lg text-apple-muted mb-8">
+                                        שטר ההלוואה הופק ונשלח ללווה (יחד עם הנחיות להוראת קבע).<br/>
+                                        הגיליון עודכן והודעה נשלחה להנהלה.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </main>
                 </div>
             );
