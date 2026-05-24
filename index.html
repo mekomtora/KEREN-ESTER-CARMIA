@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>גמ"ח קרן אסתר - סניף כרמיה</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Apple-style configuration for Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        apple: {
+                            bg: '#f5f5f7',
+                            card: '#ffffff',
+                            text: '#1d1d1f',
+                            muted: '#86868b',
+                            blue: '#0071e3',
+                            blueHover: '#0077ed',
+                            inputBg: '#f5f5f7',
+                            border: '#d2d2d7'
+                        }
+                    },
+                    boxShadow: {
+                        'apple': '0 4px 24px rgba(0,0,0,0.04)',
+                        'apple-hover': '0 10px 40px rgba(0,0,0,0.08)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f5f5f7; 
+            color: #1d1d1f;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .animate-fade-up { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        .delay-300 { animation-delay: 300ms; }
+        
+        @keyframes fadeUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        input, select, textarea { transition: all 0.2s ease-in-out; }
+        
+        .apple-header-glass {
+            background-color: rgba(255, 255, 255, 0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+        }
+
+        .segmented-control input:checked + span {
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            color: #1d1d1f;
+        }
+
+        .apple-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #86868b;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // כאן נשים בהמשך את הקישור לסקריפט החדש שנייצר ב-Google Apps Script
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNAlwhFVlUnyYpPhjUaw_CWlvigtRJOEmM7qyFNHvXo0eksT9diQkcJsfUL8wogKGB-g/exec"; 
+        
+        const ISRAELI_BANKS =[
+            { code: '12', name: 'בנק הפועלים' }, { code: '10', name: 'בנק לאומי' }, { code: '11', name: 'בנק דיסקונט' },
+            { code: '52', name: 'בנק פאג"י' }, { code: '20', name: 'בנק מזרחי טפחות' }, { code: '17', name: 'בנק מרכנתיל' },
+            { code: '31', name: 'הבנק הבינלאומי' }, { code: '09', name: 'בנק הדואר' }, { code: '04', name: 'בנק יהב' },
+            { code: '46', name: 'בנק מסד' }, { code: '14', name: 'בנק אוצר החייל' }, { code: '46', name: 'בנק פועלי אגודת ישראל' }
+        ];
+
+        const LOAN_PURPOSES = ["נישואי ילדים", "הרחבת דיור", "בר מצוה", "הוצאה חריגה", "גלגול חובות", "אחר"];
+
+        const isValidIsraeliID = (id) => {
+            let strId = String(id).trim();
+            if (strId.length > 9 || strId.length < 5) return false;
+            strId = strId.padStart(9, '0');
+            return Array.from(strId, Number).reduce((counter, digit, i) => {
+                const step = digit * ((i % 2) + 1);
+                return counter + (step > 9 ? step - 9 : step);
+            }) % 10 === 0;
+        };
+
+        const isValidMobile = (phone) => /^05\d{8}$/.test(phone);
+
+        // רכיבי UI בסיסיים
+        const InputField = ({ label, type, name, value, onChange, onBlur, placeholder, required = true, error, className = "" }) => (
+            <div className={`mb-5 ${className}`}>
+                <label className="block text-[13px] font-semibold text-apple-muted mb-2 tracking-wide pl-1">{label} {required && <span className="text-red-500">*</span>}</label>
+                <input 
+                    type={type} name={name} value={value} onChange={onChange} onBlur={onBlur} 
+                    className={`w-full px-4 h-14 rounded-2xl bg-apple-inputBg border ${error ? 'border-red-400 bg-red-50 text-red-900' : 'border-transparent text-apple-text'} outline-none focus:bg-white focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/20 text-[17px] placeholder-gray-400`} 
+                    placeholder={placeholder} required={required} 
+                />
+                {error && <p className="text-red-500 text-[12px] mt-1.5 font-medium ml-2">{error}</p>}
+            </div>
+        );
+
+        const SelectField = ({ label, name, value, onChange, options, required = true }) => (
+            <div className="mb-5">
+                <label className="block text-[13px] font-semibold text-apple-muted mb-2 tracking-wide pl-1">{label} {required && <span className="text-red-500">*</span>}</label>
+                <div className="relative">
+                    <select 
+                        name={name} value={value} onChange={onChange} 
+                        className="w-full px-4 h-14 rounded-2xl bg-apple-inputBg border border-transparent text-apple-text outline-none focus:bg-white focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/20 text-[17px] appearance-none cursor-pointer" 
+                        required={required}
+                    >
+                        <option value="" disabled>בחר בנק...</option>
+                        {options.map((opt, idx) => <option key={idx} value={`${opt.name} (${opt.code})`}>{opt.name} ({opt.code})</option>)}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-4 text-apple-muted">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const SectionCard = ({ title, subtitle, children, className = "" }) => (
+            <div className={`bg-apple-card rounded-[24px] p-8 md:p-10 shadow-apple mb-8 border border-gray-100 ${className}`}>
+                <div className="mb-8 border-b border-gray-100 pb-5">
+                    <h2 className="text-2xl font-semibold tracking-tight text-apple-text">{title}</h2>
+                    {subtitle && <p className="text-apple-muted text-sm mt-1">{subtitle}</p>}
+                </div>
+                {children}
+            </div>
+        );
+
+        const ProcessingOverlay = ({ text }) => (
+            <div className="fixed inset-0 bg-apple-bg/80 backdrop-blur-xl flex flex-col items-center justify-center z-50 transition-opacity duration-300">
+                <div className="flex flex-col items-center opacity-0 animate-fade-up">
+                    <div className="apple-spinner mb-6"></div>
+                    <h3 className="text-2xl font-semibold text-apple-text tracking-tight mb-2">מעבד נתונים</h3>
+                    <p className="text-apple-muted font-medium">{text}</p>
+                </div>
+            </div>
+        );
+
+        const App = () => {
+            const [step, setStep] = useState(1);
+            const [submitting, setSubmitting] = useState(false);
+            const [loadingText, setLoadingText] = useState("מתחבר לשרת...");
+            const [errors, setErrors] = useState({});
+
+            const [formData, setFormData] = useState({
+                firstName: '', lastName: '', idNumber: '', 
+                street: '', houseNum: '', city: 'חיפה',
+                phone: '', additionalPhone: '', email: '', 
+                isMember: '', forMeOnly: '', loanPurpose: '', loanReasonDetails: '',
+                amount: '', amountWords: '', loanType: 'installments', 
+                installmentsCount: '', monthlyAmount: '',
+                bankName: '', bankBranch: '', bankAccount: ''
+            });
+
+            // מציג ללווה כמה ערבים הוא צריך (אך המנהל יזין אותם בפועל)
+            const guarantorsCount = !formData.amount ? 0 : (parseInt(formData.amount) <= 10000 ? 2 : 2 + Math.ceil((parseInt(formData.amount) - 10000) / 10000));
+
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                let nextData = { ...formData, [name]: value };
+
+                if (name === 'amount' || name === 'loanType' || name === 'installmentsCount' || name === 'monthlyAmount') {
+                    const total = parseFloat(nextData.amount) || 0;
+                    
+                    if (nextData.loanType === 'installments' && total > 0) {
+                        if (name === 'installmentsCount' && value > 0) {
+                            nextData.monthlyAmount = Math.round(total / value);
+                        } else if (name === 'monthlyAmount' && value > 0) {
+                            nextData.installmentsCount = Math.ceil(total / value);
+                        } else if (name === 'amount' && nextData.installmentsCount > 0) {
+                            nextData.monthlyAmount = Math.round(total / nextData.installmentsCount);
+                        }
+                    }
+                }
+
+                setFormData(nextData);
+                if (errors[name]) setErrors({ ...errors, [name]: '' });
+            };
+
+            const handleBlur = (e) => {
+                const { name, value } = e.target;
+                let error = '';
+                if (name === 'idNumber' && value && !isValidIsraeliID(value)) error = 'מספר ת.ז. אינו תקין';
+                if (name === 'phone' && value && !isValidMobile(value)) error = 'מספר נייד אינו תקין';
+                setErrors(prev => ({ ...prev, [name]: error }));
+            };
+
+            const handleSubmitForm = async (e) => {
+                e.preventDefault();
+                
+                let currentErrors = {};
+                if (!isValidIsraeliID(formData.idNumber)) currentErrors.idNumber = 'מספר ת.ז. אינו תקין';
+                if (!isValidMobile(formData.phone)) currentErrors.phone = 'מספר נייד אינו תקין';
+                
+                if (!formData.isMember) currentErrors.isMember = 'נא לבחור תשובה';
+                if (!formData.forMeOnly) currentErrors.forMeOnly = 'נא לבחור תשובה';
+                if (!formData.loanPurpose) currentErrors.loanPurpose = 'נא לבחור מטרת הלוואה';
+                if (!formData.loanReasonDetails || !formData.loanReasonDetails.trim()) currentErrors.loanReasonDetails = 'נא לפרט את סיבת הבקשה';
+
+                if (Object.keys(currentErrors).length > 0) {
+                    setErrors(currentErrors);
+                    alert('אנא השלימו ותקנו את השדות המסומנים בטופס לפני השליחה.');
+                    return;
+                }
+
+                setSubmitting(true);
+                setLoadingText("שולח בקשה לאישור...");
+                
+                try {
+                    const fullAddress = `${formData.street} ${formData.houseNum}, ${formData.city}`;
+                    
+                    // מוסיפים את פרמטר ה-action כדי שהשרת ידע שזו בקשה חדשה של לקוח
+                    const dataToSend = { 
+                        ...formData, 
+                        address: fullAddress,
+                        action: 'new_loan' 
+                    };
+                    
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(dataToSend)
+                    });
+                    
+                    setTimeout(() => {
+                        setSubmitting(false);
+                        setStep(2);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }, 2500);
+                } catch (err) {
+                    console.error(err);
+                    setSubmitting(false);
+                    alert("אירעה שגיאה בתקשורת. אנא נסה שנית.");
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col font-sans">
+                    {submitting && <ProcessingOverlay text={loadingText} />}
+                    
+                    {/* Header with 2 Logos */}
+                    <header className="fixed top-0 w-full apple-header-glass border-b border-gray-200/50 z-40 transition-all">
+                        <div className="max-w-4xl mx-auto px-6 h-20 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                {/* לוגו ראשון - יש להחליף את ה-src בקישור לתמונה */}
+                                <div className="w-12 h-12 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden">
+                                    <img src="https://via.placeholder.com/150?text=Logo+1" alt="לוגו קרן אסתר" className="w-full h-full object-cover" />
+                                </div>
+                                
+                                {/* לוגו שני - יש להחליף את ה-src בקישור לתמונה */}
+                                <div className="w-12 h-12 bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center overflow-hidden">
+                                    <img src="https://via.placeholder.com/150?text=Logo+2" alt="לוגו מקום תורה" className="w-full h-full object-cover" />
+                                </div>
+                                
+                                <div className="flex flex-col">
+                                    <h1 className="text-[17px] font-bold tracking-tight text-apple-text leading-tight">קרן אסתר חיפה</h1>
+                                    <span className="text-[13px] text-apple-blue font-medium leading-tight">סניף כרמיה</span>
+                                </div>
+                            </div>
+                            <div className="text-[13px] text-apple-muted font-medium hidden md:block text-left">
+                                הלוואות ללא ריבית ועזרה הדדית<br/>
+                                <span className="text-[11px]">בשיתוף מקום תורה</span>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-grow pt-32 pb-20 px-4 sm:px-6">
+                        <div className="max-w-3xl mx-auto">
+                            
+                            {step === 1 && (
+                                <div className="opacity-0 animate-fade-up">
+                                    <div className="text-center mb-12">
+                                        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-apple-text mb-4">הגשת בקשה להלוואה.</h2>
+                                        <p className="text-lg text-apple-muted max-w-xl mx-auto">מלאו את הפרטים, והבקשה תועבר לאישור ההנהלה.</p>
+                                    </div>
+
+                                    <form onSubmit={handleSubmitForm}>
+                                        
+                                        <SectionCard title="1. פרטים אישיים ויצירת קשר" className="opacity-0 animate-fade-up delay-100">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                                                <InputField label="שם פרטי" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="ישראל" type="text" />
+                                                <InputField label="שם משפחה" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="ישראלי" type="text" />
+                                            </div>
+                                            <InputField label="מספר תעודת זהות" name="idNumber" value={formData.idNumber} onChange={handleChange} onBlur={handleBlur} error={errors.idNumber} placeholder="000000000" type="text" />
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-x-4 mt-2">
+                                                <div className="md:col-span-2">
+                                                    <InputField label="רחוב" name="street" value={formData.street} onChange={handleChange} placeholder="הזית" type="text" />
+                                                </div>
+                                                <div className="md:col-span-1">
+                                                    <InputField label="מספר" name="houseNum" value={formData.houseNum} onChange={handleChange} placeholder="10" type="text" />
+                                                </div>
+                                                <div className="md:col-span-1">
+                                                    <InputField label="עיר" name="city" value={formData.city} onChange={handleChange} placeholder="חיפה" type="text" />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 mt-2">
+                                                <InputField label="טלפון נייד" name="phone" value={formData.phone} onChange={handleChange} onBlur={handleBlur} error={errors.phone} placeholder="0500000000" type="tel" />
+                                                <InputField label="טלפון נוסף" name="additionalPhone" value={formData.additionalPhone} onChange={handleChange} placeholder="0500000000" type="text" required={false} />
+                                            </div>
+                                            
+                                            <InputField label="דואר אלקטרוני" name="email" value={formData.email} onChange={handleChange} placeholder="mail@example.com" type="email" />
+                                        </SectionCard>
+
+                                        <SectionCard title="2. פרטי ההלוואה" className="opacity-0 animate-fade-up delay-200">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 mb-6">
+                                                <div className="mb-4 md:mb-0">
+                                                    <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">האם הינך חבר בגמ"ח? <span className="text-red-500">*</span></label>
+                                                    <div className={`flex bg-apple-inputBg p-1 rounded-[14px] segmented-control relative w-full ${errors.isMember ? 'border border-red-400 bg-red-50' : ''}`}>
+                                                        <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                            <input type="radio" name="isMember" value="כן" checked={formData.isMember === 'כן'} onChange={handleChange} className="peer sr-only" />
+                                                            <span className="block py-2 text-[14px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">כן</span>
+                                                        </label>
+                                                        <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                            <input type="radio" name="isMember" value="לא" checked={formData.isMember === 'לא'} onChange={handleChange} className="peer sr-only" />
+                                                            <span className="block py-2 text-[14px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">לא</span>
+                                                        </label>
+                                                    </div>
+                                                    {errors.isMember && <p className="text-red-500 text-[12px] mt-1.5 font-medium ml-2">{errors.isMember}</p>}
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">ההלוואה מיועדת עבורי בלבד <span className="text-red-500">*</span></label>
+                                                    <div className={`flex bg-apple-inputBg p-1 rounded-[14px] segmented-control relative w-full ${errors.forMeOnly ? 'border border-red-400 bg-red-50' : ''}`}>
+                                                        <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                            <input type="radio" name="forMeOnly" value="כן" checked={formData.forMeOnly === 'כן'} onChange={handleChange} className="peer sr-only" />
+                                                            <span className="block py-2 text-[14px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">כן</span>
+                                                        </label>
+                                                        <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                            <input type="radio" name="forMeOnly" value="לא" checked={formData.forMeOnly === 'לא'} onChange={handleChange} className="peer sr-only" />
+                                                            <span className="block py-2 text-[14px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">לא</span>
+                                                        </label>
+                                                    </div>
+                                                    {errors.forMeOnly && <p className="text-red-500 text-[12px] mt-1.5 font-medium ml-2">{errors.forMeOnly}</p>}
+                                                </div>
+                                            </div>
+
+                                            <div className="mb-6 border-t border-gray-100 pt-5">
+                                                <label className="block text-[13px] font-semibold text-apple-muted mb-3 pl-1">מטרת ההלוואה <span className="text-red-500">*</span></label>
+                                                <div className="flex flex-wrap gap-2.5">
+                                                    {LOAN_PURPOSES.map(purpose => (
+                                                        <button type="button" key={purpose} onClick={() => { setFormData({...formData, loanPurpose: purpose}); setErrors({...errors, loanPurpose: ''}); }}
+                                                            className={`px-5 py-2.5 rounded-full text-[14.5px] font-medium transition-all duration-200 border ${formData.loanPurpose === purpose ? 'bg-apple-blue text-white border-apple-blue shadow-sm' : 'bg-apple-inputBg text-apple-text border-transparent hover:bg-gray-200'}`}>
+                                                            {purpose}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                {errors.loanPurpose && <p className="text-red-500 text-[12px] mt-2 font-medium ml-2">{errors.loanPurpose}</p>}
+                                            </div>
+
+                                            <div className="mb-8 border-t border-gray-100 pt-5">
+                                                <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">פירוט סיבת הבקשה <span className="text-red-500">*</span></label>
+                                                <textarea name="loanReasonDetails" value={formData.loanReasonDetails} onChange={handleChange} placeholder="פרטו כאן..."
+                                                    className={`w-full px-4 py-4 rounded-2xl bg-apple-inputBg border ${errors.loanReasonDetails ? 'border-red-400 bg-red-50 text-red-900' : 'border-transparent text-apple-text'} outline-none focus:bg-white focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/20 text-[17px] placeholder-gray-400 min-h-[100px] resize-y`}></textarea>
+                                                {errors.loanReasonDetails && <p className="text-red-500 text-[12px] mt-1.5 font-medium ml-2">{errors.loanReasonDetails}</p>}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 pt-6 border-t border-gray-100">
+                                                <InputField label="סכום הלוואה מבוקש (₪)" name="amount" value={formData.amount} onChange={handleChange} placeholder="5000" type="number" />
+                                                <InputField label="סכום במילים" name="amountWords" value={formData.amountWords} onChange={handleChange} placeholder="חמשת אלפים שקלים" type="text" />
+                                            </div>
+
+                                            <div className="mb-6 mt-2">
+                                                <label className="block text-[13px] font-semibold text-apple-muted mb-2 pl-1">סוג החזר מבוקש <span className="text-red-500">*</span></label>
+                                                <div className="flex bg-apple-inputBg p-1.5 rounded-[14px] segmented-control relative">
+                                                    <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                        <input type="radio" name="loanType" value="standing" checked={formData.loanType === 'standing'} onChange={handleChange} className="peer sr-only" />
+                                                        <span className="block py-2.5 text-[15px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">החזר יחיד</span>
+                                                    </label>
+                                                    <label className="flex-1 text-center cursor-pointer relative z-10">
+                                                        <input type="radio" name="loanType" value="installments" checked={formData.loanType === 'installments'} onChange={handleChange} className="peer sr-only" />
+                                                        <span className="block py-2.5 text-[15px] rounded-[10px] text-apple-muted transition-all duration-300 font-medium">החזר בתשלומים</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {formData.loanType === 'installments' && (
+                                                <div className="grid grid-cols-2 gap-x-6 animate-fade-up">
+                                                    <InputField label="מספר תשלומים" name="installmentsCount" value={formData.installmentsCount} onChange={handleChange} placeholder="10" type="number" />
+                                                    <InputField label="סכום חודשי (₪)" name="monthlyAmount" value={formData.monthlyAmount} onChange={handleChange} placeholder="500" type="number" />
+                                                </div>
+                                            )}
+
+                                            {formData.amount && (
+                                                <div className="mt-2 inline-flex items-center gap-3 bg-[#f5f5f7] px-4 py-3 rounded-2xl border border-gray-200">
+                                                    <svg className="w-5 h-5 text-apple-text" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                                    <div>
+                                                        <span className="text-[13px] text-apple-muted block">לידיעתך, לאחר אישור המנהל תזדקק ל:</span>
+                                                        <span className="text-[17px] font-semibold text-apple-text">{guarantorsCount} ערבים חתומים</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </SectionCard>
+
+                                        <SectionCard title="3. פרטי בנק להעברה" subtitle="אנא ודאו שפרטי החשבון מדויקים למניעת עיכובים בהפקדה." className="opacity-0 animate-fade-up delay-300">
+                                            <SelectField label="שם הבנק" name="bankName" value={formData.bankName} onChange={handleChange} options={ISRAELI_BANKS} />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 mt-2">
+                                                <InputField label="מספר סניף" name="bankBranch" value={formData.bankBranch} onChange={handleChange} placeholder="000" type="text" />
+                                                <InputField label="מספר חשבון" name="bankAccount" value={formData.bankAccount} onChange={handleChange} placeholder="000000" type="text" />
+                                            </div>
+                                        </SectionCard>
+
+                                        <div className="mt-10 flex flex-col items-center opacity-0 animate-fade-up delay-300">
+                                            <button type="submit" disabled={submitting} className="bg-apple-blue hover:bg-apple-blueHover text-white text-[17px] font-semibold py-4 px-12 rounded-full shadow-md transition-all duration-300 transform active:scale-95 w-full md:w-auto min-w-[220px]">
+                                                הגש בקשה לאישור
+                                            </button>
+                                            
+                                            <p className="text-center text-apple-muted text-[14px] mt-4 font-medium leading-relaxed">
+                                                שליחת הבקשה אינה מהווה אישור למתן הלוואה.<br/>הבקשה כפופה לאישור הנהלת הגמ"ח.
+                                            </p>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
+                            {step === 2 && (
+                                <div className="bg-apple-card rounded-[32px] p-10 md:p-16 shadow-apple text-center opacity-0 animate-fade-up border border-gray-100 max-w-2xl mx-auto">
+                                    <div className="w-24 h-24 bg-apple-blue rounded-full flex items-center justify-center mx-auto mb-8 shadow-sm">
+                                        <svg className="text-white w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <h2 className="text-4xl font-bold tracking-tight text-apple-text mb-4">בקשתך נקלטה במערכת.</h2>
+                                    <p className="text-[19px] text-apple-muted mb-10 leading-relaxed">
+                                        אישור על קליטת הבקשה נשלח כעת לכתובת:<br/>
+                                        <span className="font-semibold text-apple-text">{formData.email}</span>
+                                    </p>
+                                    
+                                    <div className="bg-[#f5f5f7] rounded-[24px] p-8 text-right text-[15px]">
+                                        <h4 className="font-semibold text-apple-text mb-6 text-lg">מה הצעד הבא?</h4>
+                                        <ul className="space-y-5 text-apple-muted">
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-7 h-7 rounded-full bg-apple-blue text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</div>
+                                                <span className="leading-relaxed">הבקשה הועברה למנהל סניף כרמיה (יונה) לבחינה ואישור.</span>
+                                            </li>
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-7 h-7 rounded-full bg-apple-text text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</div>
+                                                <span className="leading-relaxed">לאחר אישור הבקשה והזנת פרטי הערבים על ידי המנהל, תקבל/י שטר הלוואה סופי למייל.</span>
+                                            </li>
+                                            <li className="flex items-start gap-4">
+                                                <div className="w-7 h-7 rounded-full bg-apple-text text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</div>
+                                                <span className="leading-relaxed">יש להדפיס את השטר, להחתים את הערבים, ולהחזיר למשרדי הגמ"ח יחד עם צ'ק פיקדון.</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    <footer className="bg-apple-card border-t border-gray-200 pt-10 pb-16">
+                        <div className="max-w-4xl mx-auto px-6">
+                            <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-[12px] text-apple-muted">
+                                <div className="flex gap-4">
+                                    <span>ע"ר 580021475</span>
+                                    <span className="hidden md:inline">|</span>
+                                    <span>חיפה, ישראל</span>
+                                </div>
+                                <div className="text-center md:text-left">
+                                    Copyright © {new Date().getFullYear()} גמ"ח קרן אסתר, סניף כרמיה.
+                                </div>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
