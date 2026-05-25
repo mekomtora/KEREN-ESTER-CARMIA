@@ -103,7 +103,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxWZ_tw2jYKM6gtR27Pb4YYeKGXhsjGuc0c5vOJQsdJW9LqZ_nbpFd2q4eAeQnkj4pN/exec"; 
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNAlwhFVlUnyYpPhjUaw_CWlvigtRJOEmM7qyFNHvXo0eksT9diQkcJsfUL8wogKGB-g/exec"; 
 
         const isValidIsraeliID = (id) => {
             let strId = String(id).trim();
@@ -265,6 +265,10 @@
                     <header className="fixed top-0 w-full apple-header-glass border-b border-gray-800 z-40">
                         <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
                             <div className="flex items-center gap-3">
+                                {/* לוגו מקום תורה */}
+                                <div className="w-10 h-10 bg-white rounded-lg border border-gray-700 shadow-sm flex items-center justify-center overflow-hidden">
+                                    <img src="LOGO_MEKOMTORA.png" alt="לוגו מקום תורה" className="w-full h-full object-cover" />
+                                </div>
                                 <h1 className="text-[17px] font-bold text-white tracking-wide">פאנל מנהל מאשר</h1>
                             </div>
                             <div className="text-[13px] text-gray-300 font-medium">
